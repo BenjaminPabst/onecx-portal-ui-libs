@@ -1,7 +1,18 @@
 import { Component, Inject, OnInit, Optional } from '@angular/core'
 import { Router } from '@angular/router'
 import { AppStateService, CONFIG_KEY, ConfigurationService, ThemeService } from '@onecx/angular-integration-interface'
-import { Observable, combineLatest, concat, filter, map, mergeMap, of, withLatestFrom } from 'rxjs'
+import {
+  Observable,
+  combineLatest,
+  concat,
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  map,
+  mergeMap,
+  of,
+  withLatestFrom,
+} from 'rxjs'
 import {
   WORKSPACE_CONFIG_BFF_SERVICE_PROVIDER,
   WorkspaceConfigBffService,
@@ -40,14 +51,22 @@ export class PortalFooterComponent implements OnInit {
       this.themeService.currentTheme$.asObservable(),
       this.appState.currentWorkspace$.asObservable(),
     ]).pipe(
-      mergeMap(([theme, portalData]) => {
-        if (!theme.logoUrl && !portalData.logoUrl) {
-          return (this.workspaceConfigBffService?.getThemeLogoByName(theme.name ?? '') ?? of()).pipe(
+      map(([theme, portal]) => {
+        if (!theme.logoUrl && !portal.logoUrl) {
+          return { name: theme.name ?? '' }
+        }
+        return { url: theme.logoUrl || portal.logoUrl }
+      }),
+      distinctUntilChanged((a, b) => a.url === b.url && a.name === b.name),
+      debounceTime(50),
+      mergeMap((info) => {
+        if (!info.url && info.name) {
+          return (this.workspaceConfigBffService?.getThemeLogoByName(info.name) ?? of()).pipe(
             filter((blob) => !!blob),
             map((blob) => URL.createObjectURL(blob))
           )
         }
-        return of(theme.logoUrl || portalData.logoUrl)
+        return of(info.url)
       })
     )
   }
